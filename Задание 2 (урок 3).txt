@@ -1,0 +1,231 @@
+// Точка входа
+Sub main;
+Var
+	e : Expression;
+	inExprStr : String;
+Begin
+	inExprStr :=  "25 - 4 + ( 3 + 2 ) * 5"
+				 // "2 + 4 - ( 5 - 2 - 1 ) * 4"
+				 // "2 - 4 + -6 + 20 * 4 / 5 - 3 + 1 + 4"
+				 ;		
+	e := New Expression.Create(inExprStr);	
+	Debug.WriteLine("Исходная запись = " + e.Expression);	
+	Debug.WriteLine("Обратная польская запись = " +  e.ExpressionPolishReverseNotation);	
+	Debug.WriteLine("Результат = " + e.ExpressionValue.ToString);		
+End Sub main;
+
+
+// Интерфейс для работы со стеком
+Public Interface IStackClass
+	Public Property Count: Integer
+		Get	
+	End Property Count;
+	 	
+	Public Sub Push(element: String);	
+	
+	Public Function Pop: String;	
+	
+	Public Function Peek: String;
+End Interface IStackClass;
+
+
+// Класс реализующий стек
+Class StackClass : Object, IStackClass
+	_stackValues: IStringList;
+	
+	Public Property Count: Integer 
+		Get
+		Begin
+			Return _stackValues.Count;
+		End Get
+	End Property Count;		
+				
+	Public Constructor Create;
+	Begin
+		_stackValues := New StringList.Create;			
+	End Constructor Create;
+		
+	Public Sub Push(element: String);
+	Begin
+		_stackValues.Add(element);	
+	End Sub Push;
+		
+	Public Function Pop: String;
+	Var element: String;
+	Begin
+		element := _stackValues(_stackValues.Count - 1);
+		_stackValues.RemoveAt(_stackValues.Count - 1);
+		Return element;	
+	End Function Pop;
+		
+	Public Function Peek: String;
+	Begin
+		Return _stackValues.Count > 0 ? _stackValues( _stackValues.Count - 1 ) : "";	
+	End Function Peek;	
+End Class StackClass;
+	
+
+// Класс реализующий выражение
+Public Class Expression : Object
+	_expressionLexemes : IStringList;
+	
+	Const Plus = "+";
+	Const Minus = "-";
+	Const Multiplication = "*";
+	Const Division = "/"; 	
+	Const OpenBracket = "(";
+	Const CloseBracket = ")";	
+		
+	
+	//  Конструктор, разделитель в выражении пробел
+	Public Constructor Create(expression : String);	
+	Begin
+		_expressionLexemes := New StringList.Create;
+		_expressionLexemes.Text(" ") := expression;		
+	End Constructor Create; 
+	
+	
+	// Выражение в виде строки (разделитель пробел)
+	Public Property Expression: String
+		Get
+		Begin				
+			Return _expressionLexemes.Text(" ");
+		End Get		
+	End Property Expression;
+	
+	
+	// Выражение в виде обратной польской записи
+	Public Property ExpressionPolishReverseNotation: String
+		Get
+		Begin				
+			Return GetExpressionPolishReverseNotation(_expressionLexemes).Text(" ");
+		End Get		
+	End Property ExpressionPolishReverseNotation;
+		
+	
+	// Значение выражения
+	Public Property ExpressionValue: Double
+		Get
+		Begin				
+			Return CalculateExpresssionInReversePolishNotation( Self.GetExpressionPolishReverseNotation(_expressionLexemes) );
+		End Get		
+	End Property ExpressionValue;
+	
+	
+	// Преобразование в обратную польскую запись
+	Function GetExpressionPolishReverseNotation(lexemes : IStringList) : IStringList;
+	Var 
+		stack : IStackClass;
+		reverseNotation : IStringList;
+		idx : integer;
+		lexema, stackLexema : string;
+		operand : double;		
+	Begin
+		stack := New StackClass.Create;
+		reverseNotation := New StringList.Create;
+		
+		idx := 0;
+		While idx < lexemes.Count  Do				
+			lexema := lexemes(idx);
+						
+			If Double.TryParse(lexema, operand) Then				
+				reverseNotation.Add(lexema);
+				
+			Elseif lexema = OpenBracket Then
+				stack.Push(lexema);					
+				
+			Elseif Self.IsOperation(lexema) Then					
+				stackLexema := stack.Peek;
+				While Self.IsOperation(stackLexema) And Self.IsOperationHasHigherPriority(stackLexema, lexema) Do
+					reverseNotation.Add(stackLexema);				
+					stack.Pop;					
+					stackLexema := stack.Peek;
+				End While;				
+				stack.Push(lexema);
+						
+			Elseif lexema = CloseBracket Then				
+				stackLexema := stack.Peek;
+				While stackLexema <> OpenBracket  Do
+					reverseNotation.Add(stackLexema);					
+					stack.Pop;				
+					stackLexema := stack.Peek;
+				End While;
+				stack.Pop;
+			End If;	
+			idx := idx + 1;	
+		End While;	
+		
+		While stack.Count > 0 Do
+			stackLexema := stack.Pop;
+			reverseNotation.Add(stackLexema);
+		End While;	
+			
+		Return reverseNotation;
+	End Function GetExpressionPolishReverseNotation;
+	
+	
+	// Возвращает значение приоритета в виде трех битовой маски: 1 бит если операция "*" и "/",
+	// 2 бит для "+" и "-", 3 бит выделен для порядка следования (здесь не заполняется)
+	Function GetOperationPriority(operationSymbol: String) : Integer;		
+	Begin				
+		Return ((operationSymbol = Multiplication) Or (operationSymbol = Division) ? Math.PowerI(2, 2) As Integer : 0) +						
+				((operationSymbol = Plus) Or (operationSymbol = Minus) ? Math.PowerI(2, 1) As Integer : 0); 	
+	End Function GetOperationPriority;
+			
+			
+	// Проверяет, что первая операция имеет sболее высокий приоритет относительно второй
+	Function IsOperationHasHigherPriority(firstOperation, secondOperation: String) : Boolean;		
+	Begin
+		// "+1" чтобы учесть порядок следования 
+		Return	(Self.GetOperationPriority(firstOperation) + 1) >= Self.GetOperationPriority(secondOperation);		
+	End Function IsOperationHasHigherPriority;		
+	
+	
+	// Вычисление выражения	в обратной польской записи
+	Function CalculateExpresssionInReversePolishNotation(lexemes: IStringList) : Double; 
+	Var
+		stack: IStackClass;
+		idx: Integer;	
+		lexema: String;	                                                                       
+		operationResult, firstOperand, secondOperand: Double;	
+	Begin
+		stack := New StackClass.Create;
+			
+		For idx := 0 To lexemes.Count - 1 Do
+			lexema := lexemes(idx);				
+			If Self.IsOperation(lexema) Then				
+				secondOperand := Double.Parse(stack.Pop); 	
+				firstOperand := Double.Parse(stack.Pop); 				
+				operationResult := CalcOperation(firstOperand, secondOperand, lexema); 				
+				stack.Push(operationResult.ToString);
+			Else				
+				stack.Push(lexema);				
+			End If;		
+		End For;
+				
+ 		Return Double.Parse(stack.Pop);	
+	End Function CalculateExpresssionInReversePolishNotation;
+	
+	
+	// Вычисление операции
+	Function CalcOperation(firstOperand, secondOperand : Double; operationSymbol : String) : double;
+	Var
+		operationResult : double;
+	Begin
+		Select Case operationSymbol
+			Case Plus: operationResult := firstOperand + secondOperand;
+			Case Minus: operationResult := firstOperand - secondOperand;
+			Case Division: operationResult := firstOperand / secondOperand;
+			Case Multiplication: operationResult := firstOperand * secondOperand;	
+		End Select;
+		Return operationResult;	
+	End Function CalcOperation;
+	
+	
+	// Проверка, что лексема обозначает операцию
+	Function IsOperation(lexema : String) : Boolean;	
+	Begin		
+		Return (lexema = Minus) Or (lexema = Plus) Or (lexema = Division) Or (lexema = Multiplication);
+	End Function IsOperation;
+		
+End Class Expression;
