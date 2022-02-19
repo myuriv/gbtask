@@ -1,0 +1,32 @@
+1.
+SELECT name
+  FROM city
+ WHERE countrycode = 'JPN';
+
+2.
+SELECT distinct city
+  FROM station
+ WHERE mod(id, 2) = 0;
+
+3.
+SELECT trunc(avg(population))
+  FROM city;
+
+4.
+SELECT round(long_w, 4)
+  FROM station
+ WHERE lat_n = (SELECT min(lat_n)
+                  FROM station
+                 WHERE lat_n > 38.7780);
+
+5.
+SELECT sum(c.population)
+  FROM CITY ct
+       JOIN country cr on ct.countrycode = cr.code
+ WHERE cr.continent = 'Asia';
+
+6.
+SELECT ct.name
+  FROM CITY ct
+       JOIN country cr on ct.countrycode = cr.code
+ WHERE cr.continent = 'Africa';  
